@@ -51,6 +51,8 @@ from transformers import (WEIGHTS_NAME, AdamW, get_linear_schedule_with_warmup,
                           RobertaConfig, RobertaForSequenceClassification, RobertaTokenizer,
                           DistilBertConfig, DistilBertForMaskedLM, DistilBertForSequenceClassification, DistilBertTokenizer)
 
+USE_GPU = False
+
 logger = logging.getLogger(__name__)
 
 MODEL_CLASSES = {
@@ -121,7 +123,8 @@ def set_seed(seed=42):
 
 def train(args, train_dataset, model, tokenizer):
     """ Train the model """ 
-    args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
+    if USE_GPU:
+        args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
     
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, 
@@ -170,7 +173,8 @@ def train(args, train_dataset, model, tokenizer):
     logger.info("***** Running training *****")
     logger.info("  Num examples = %d", len(train_dataset))
     logger.info("  Num Epochs = %d", args.num_train_epochs)
-    logger.info("  Instantaneous batch size per GPU = %d", args.per_gpu_train_batch_size)
+    if USE_GPU:
+        logger.info("  Instantaneous batch size per GPU = %d", args.per_gpu_train_batch_size)
     logger.info("  Total train batch size (w. parallel, distributed & accumulation) = %d",
                 args.train_batch_size * args.gradient_accumulation_steps * (
                     torch.distributed.get_world_size() if args.local_rank != -1 else 1))
@@ -280,8 +284,8 @@ def evaluate(args, model, tokenizer,eval_when_training=False):
 
     if not os.path.exists(eval_output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(eval_output_dir)
-
-    args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
+    if USE_GPU:
+        args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
     # Note that DistributedSampler samples randomly
     eval_sampler = SequentialSampler(eval_dataset) if args.local_rank == -1 else DistributedSampler(eval_dataset)
     eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size,num_workers=4,pin_memory=True)
@@ -325,8 +329,8 @@ def test(args, model, tokenizer):
     # Loop to handle MNLI double evaluation (matched, mis-matched)
     eval_dataset = TextDataset(tokenizer, args,args.test_data_file)
 
-
-    args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
+    if USE_GPU:
+        args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
     # Note that DistributedSampler samples randomly
     eval_sampler = SequentialSampler(eval_dataset) if args.local_rank == -1 else DistributedSampler(eval_dataset)
     eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size)
@@ -489,8 +493,9 @@ def main():
         torch.distributed.init_process_group(backend='nccl')
         args.n_gpu = 1
     args.device = device
-    args.per_gpu_train_batch_size=args.train_batch_size//args.n_gpu
-    args.per_gpu_eval_batch_size=args.eval_batch_size//args.n_gpu
+    if USE_GPU:
+        args.per_gpu_train_batch_size=args.train_batch_size//args.n_gpu
+        args.per_gpu_eval_batch_size=args.eval_batch_size//args.n_gpu
     # Setup logging
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
