@@ -307,10 +307,39 @@ def evaluate(args, model, tokenizer,eval_when_training=False):
         inputs = batch[0].to(args.device)        
         label=batch[1].to(args.device) 
         with torch.no_grad():
-            lm_loss,logit = model(inputs,label)
+            import pdb; 
+            pdb.set_trace()
+            
+            from  torch.onnx import export as onnx_export
+            from copy import deepcopy
+            dummy_input = {'input_ids': inputs}
+            ort_model_path = "custom_export.onnx"
+            
+            inputs = {
+                'input_ids': {0: 'batch_size', 1: 'sequence_length'}, 
+                }
+            from collections import OrderedDict
+            inputs = OrderedDict(inputs)
+            outputs = {'prob': {0: 'batch_size'}}
+            from itertools import chain
+            import pdb; pdb.set_trace()
+            onnx_export(model=model, args=(dummy_input, ), 
+                        f =ort_model_path ,input_names = list(inputs.keys()), 
+                        output_names = list(outputs.keys()), 
+                        dynamic_axes=dict(chain(inputs.items(), outputs.items())), 
+                        do_constant_folding=True)
+
+                
+            
+            lm_loss,logit = infer_ort(inputs, label)
+            # logit=torch.sigmoid(logit)
+            # lm_loss,logit = model(inputs ,label) # torch.Size([64, 400]), torch.Size([64]) -> tensor(0.5167), torch.Size([64, 1])
             eval_loss += lm_loss.mean().item()
             logits.append(logit.cpu().numpy())
             labels.append(label.cpu().numpy())
+            # import pdb; pdb.set_trace()
+            cur_acc = np.mean(np.concatenate(labels,0)==(np.concatenate(logits,0)[:,0]>0.5))
+            print(cur_acc)
         nb_eval_steps += 1
     logits=np.concatenate(logits,0)
     labels=np.concatenate(labels,0)
@@ -325,6 +354,25 @@ def evaluate(args, model, tokenizer,eval_when_training=False):
     }
     return result
 
+def infer_ort(inputs, label):
+    """
+    # torch.Size([64, 400]), torch.Size([64]) -> tensor(0.5167), torch.Size([64, 1])
+    """
+    # import pdb; pdb.set_trace()
+    import onnx
+    import onnxruntime
+    # ort_model_path = "./saved_models/best_onnx/model.onnx"
+    ort_model_path = "custom_export.onnx"
+    ort_model = onnx.load(ort_model_path)
+    session = onnxruntime.InferenceSession(ort_model.SerializeToString(), providers=onnxruntime.get_available_providers())
+    # import pdb; pdb.set_trace()
+    # onnx_inputs = {'input_ids': inputs.detach().numpy(), 'attention_mask': inputs.ne(1).to(torch.int64).detach().numpy()}
+    onnx_inputs = {'input_ids': inputs.detach().numpy()}
+    # import pdb; pdb.set_trace()
+    pred = session.run(None, onnx_inputs)
+    return torch.tensor(1.1), torch.Tensor(pred[0])
+    
+    
 def test(args, model, tokenizer):
     # Loop to handle MNLI double evaluation (matched, mis-matched)
     eval_dataset = TextDataset(tokenizer, args,args.test_data_file)

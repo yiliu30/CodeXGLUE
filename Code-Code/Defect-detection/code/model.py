@@ -22,6 +22,11 @@ class Model(nn.Module):
 
         
     def forward(self, input_ids=None,labels=None): 
+        # import pdb; pdb.set_trace()
+        # import torch.onnx.export as onnx_export
+        # import pdb; 
+
+        # import pdb; pdb.set_trace()
         outputs=self.encoder(input_ids,attention_mask=input_ids.ne(1))[0]
 
         # Apply dropout

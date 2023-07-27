@@ -2,10 +2,9 @@ cd code
 python run.py \
     --output_dir=./saved_models \
     --model_type=roberta \
-    --tokenizer_name=/home/st_liu/workspace/inc_examples/mrm8488/codebert-base-finetuned-detect-insecure-code \
-    --model_name_or_path=/home/st_liu/workspace/inc_examples/mrm8488/codebert-base-finetuned-detect-insecure-code \
+    --tokenizer_name=/home/st_liu/workspace/inc_examples/microsoft/codebert-base \
+    --model_name_or_path=/home/st_liu/workspace/inc_examples/microsoft/codebert-base \
     --do_eval \
-    --do_test \
     --train_data_file=../dataset/train.jsonl \
     --eval_data_file=../dataset/valid.jsonl \
     --test_data_file=../dataset/test.jsonl \
